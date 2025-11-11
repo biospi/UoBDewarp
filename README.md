@@ -1,8 +1,15 @@
-# UoB Wyndhurst Farm Front End
+# UoB Video Dewarp
 
 This project provides a simple GUI tool that allows University of Bristol collaborators to easily de-warp fisheye videos.
 
 ---
+
+## Before / After Dewarp Comparison
+
+| Original (Fisheye) | Dewarped Output |
+|--------------------|-----------------|
+| ![](no_dewarp.png) | ![](dewarp.png) |
+
 
 ## Installation (Development)
 ### 1. Clone the repository
