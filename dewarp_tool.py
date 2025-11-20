@@ -68,6 +68,7 @@ def get_input_codec(video_path: Path):
 
 
 def process_folder():
+    start_button.config(state="disabled")
     save_settings()
     folder = folder_var.get().strip()
     if not folder or not Path(folder).exists():
@@ -192,6 +193,7 @@ def process_folder():
 
         root.after(0, lambda: progress_bar.config(value=total_frames))
         root.after(0, lambda: status_label.config(text="Finished"))
+        root.after(0, lambda: start_button.config(state="normal"))
         root.after(0, lambda: messagebox.showinfo("Done", "All videos processed successfully."))
 
     threading.Thread(target=run, daemon=True).start()
@@ -276,7 +278,8 @@ for label, var, hint in params:
     ttk.Entry(row, textvariable=var, width=10).pack(side="left", padx=(5,10))
     ttk.Label(row, text=hint, bootstyle="secondary").pack(side="left")
 
-ttk.Button(root, text="Start Dewarping", bootstyle=SUCCESS, command=process_folder).pack(pady=20)
+start_button = ttk.Button(root, text="Start Dewarping", bootstyle=SUCCESS, command=process_folder)
+start_button.pack(pady=20)
 
 progress_bar = ttk.Progressbar(root, bootstyle=INFO)
 
