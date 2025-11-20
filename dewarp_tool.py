@@ -218,7 +218,7 @@ except Exception:
 
 pad = 8
 
-ttk.Label(root, text="Select Folder Containing .mp4 Files", font=("Segoe UI", 11, "bold")).pack(pady=(10,5))
+ttk.Label(root, text="Select Folder Containing Video Files (.mp4)", font=("Segoe UI", 11, "bold")).pack(pady=(10,5))
 
 folder_frame = ttk.Frame(root)
 folder_frame.pack(fill="x", padx=pad)
