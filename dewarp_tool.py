@@ -108,7 +108,7 @@ def process_folder():
         return
 
     progress_bar.config(maximum=total_frames, value=0)
-    progress_bar.pack(fill="x", padx=10, pady=(0, 0))
+    progress_bar.pack(fill="x", padx=10, pady=(0, 10))
     status_label.config(text=f"Processing...")
 
     def run():
@@ -120,6 +120,7 @@ def process_folder():
 
             temp_output = video_file.with_name(video_file.stem + "_dewarp_temp.mp4")
             final_output = video_file.with_name(video_file.stem + "_dewarped.mp4")
+            final_output.unlink(missing_ok=True)
 
             cap = cv2.VideoCapture(str(video_file))
             if not cap.isOpened():
