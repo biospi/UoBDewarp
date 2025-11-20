@@ -9,12 +9,13 @@ from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import cv2
+import subprocess
+import json
 
 from dewarp import Defisheye
 
-import json
-
 SETTINGS_FILE = "settings.json"
+ICON_FILENAME = "uob.png"
 
 
 def save_settings():
@@ -55,6 +56,17 @@ def load_settings():
         print(e)
 
 
+def get_input_codec(video_path: Path):
+    """Use ffprobe to determine codec of input video."""
+    result = subprocess.run([
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(video_path)
+    ], capture_output=True, text=True)
+    return result.stdout.strip()
+
+
 def process_folder():
     save_settings()
     folder = folder_var.get().strip()
@@ -77,14 +89,14 @@ def process_folder():
     dtype = dtype_var.get()
     fmt = format_var.get()
 
-    mp4_files = list(Path(folder).glob("*.mp4"))
+    mp4_files = list(Path(folder).rglob("*.mp4"))
+    mp4_files = [x for x in mp4_files if "_dewarped" not in x.as_posix()]
     if not mp4_files:
         messagebox.showinfo("No Videos", "No .mp4 files found in selected folder.")
         return
 
     status_label.config(text="Calculating total frames...")
 
-    # -------- Calculate total frames for progress bar --------
     total_frames = 0
     for video in mp4_files:
         cap = cv2.VideoCapture(str(video))
@@ -103,11 +115,11 @@ def process_folder():
         processed_frames = 0
 
         for video_file in mp4_files:
-            if "_dewarped" in video_file.name:
-                print(f"already dewarped! {video_file}")
-                continue
-            output_file = video_file.with_name(video_file.stem + "_dewarped.mp4")
-            Path(output_file).unlink(missing_ok=True)
+            # if "_dewarped" in video_file.name:
+            #     continue
+
+            temp_output = video_file.with_name(video_file.stem + "_dewarp_temp.mp4")
+            final_output = video_file.with_name(video_file.stem + "_dewarped.mp4")
 
             cap = cv2.VideoCapture(str(video_file))
             if not cap.isOpened():
@@ -116,8 +128,24 @@ def process_folder():
             fps = cap.get(cv2.CAP_PROP_FPS)
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            writer = cv2.VideoWriter(str(output_file), fourcc, fps, (width, height))
+
+            codec = get_input_codec(video_file)
+            if codec == "":
+                codec = "libx264"
+
+            ffmpeg = subprocess.Popen([
+                "ffmpeg", "-y",
+                "-f", "rawvideo",
+                "-vcodec", "rawvideo",
+                "-pix_fmt", "bgr24",
+                "-s", f"{width}x{height}",
+                "-r", str(fps),
+                "-i", "-",
+                "-c:v", codec,
+                "-preset", "slow",
+                "-crf", "23",
+                str(temp_output)
+            ], stdin=subprocess.PIPE)
 
             while True:
                 ret, frame = cap.read()
@@ -137,20 +165,31 @@ def process_folder():
                     crop_bottom=crop_bottom,
                 )
 
-                dewarped_frame = obj.convert()
+                processed = obj.convert()
+                if processed.shape[:2] != (height, width):
+                    processed = cv2.resize(processed, (width, height))
 
-                if dewarped_frame.shape[:2] != (height, width):
-                    dewarped_frame = cv2.resize(dewarped_frame, (width, height))
-
-                writer.write(dewarped_frame)
+                ffmpeg.stdin.write(processed.tobytes())
 
                 processed_frames += 1
-                # Update progress safely via GUI thread
                 root.after(0, lambda v=processed_frames: progress_bar.config(value=v))
 
             cap.release()
-            writer.release()
+            ffmpeg.stdin.close()
+            ffmpeg.wait()
 
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-i", str(temp_output),
+                "-i", str(video_file),
+                "-map_metadata", "1",
+                "-c", "copy",
+                str(final_output)
+            ])
+
+            temp_output.unlink(missing_ok=True)
+
+        root.after(0, lambda: progress_bar.config(value=total_frames))
         root.after(0, lambda: status_label.config(text="Finished"))
         root.after(0, lambda: messagebox.showinfo("Done", "All videos processed successfully."))
 
@@ -163,11 +202,16 @@ def browse_folder():
         folder_var.set(path)
 
 
-# GUI Setup
 root = ttk.Window(themename="flatly")
 root.title("Video Dewarping Tool")
-root.geometry("600x540")
+#root.geometry("600x540")
 root.resizable(False, False)
+
+try:
+    img = tk.PhotoImage(file=ICON_FILENAME)
+    root.iconphoto(False, img)
+except Exception:
+    pass
 
 pad = 8
 
@@ -187,7 +231,6 @@ ttk.Separator(root).pack(fill="x", pady=10)
 params_frame = ttk.Frame(root)
 params_frame.pack(padx=pad, pady=5, fill="x")
 
-### dtype & format dropdowns
 dtype_var = tk.StringVar(value="stereographic")
 format_var = tk.StringVar(value="circular")
 
@@ -207,7 +250,6 @@ ttk.Combobox(format_row, textvariable=format_var,
              state="readonly", width=16).pack(side="left", padx=(5,10))
 ttk.Label(format_row, text="Circular = typical fisheye", bootstyle="secondary").pack(side="left")
 
-### Numeric controls
 fov_var = tk.StringVar(value="180")
 pfov_var = tk.StringVar(value="120")
 angle_var = tk.StringVar(value="-0.4")
@@ -226,7 +268,6 @@ params = [
     ("Crop Bottom", crop_bottom_var, "Remove warped edge."),
 ]
 
-
 for label, var, hint in params:
     row = ttk.Frame(params_frame)
     row.pack(fill="x", pady=3)
@@ -236,7 +277,6 @@ for label, var, hint in params:
 
 ttk.Button(root, text="Start Dewarping", bootstyle=SUCCESS, command=process_folder).pack(pady=20)
 
-# NEW: Progress bar (initially hidden until work begins)
 progress_bar = ttk.Progressbar(root, bootstyle=INFO)
 
 status_label = ttk.Label(root, text="Ready", anchor="center")

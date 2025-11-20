@@ -58,6 +58,7 @@ Send this file to colleagues.
 ##  Prerequisite
 
 - Python 3.9+ (for development)
+- FFMPEG https://www.ffmpeg.org/download.html
 
 ```bash
 Project Structure
